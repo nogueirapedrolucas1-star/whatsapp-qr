@@ -1,60 +1,58 @@
 const express = require("express");
 const cors = require("cors");
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason } = require("@whiskeysockets/baileys");
 const QRCode = require("qrcode");
 
 const app = express();
 app.use(cors());
 
 let sessions = {};
+let latestQR = null;
 
-async function startSession(id) {
-  const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${id}`);
+async function startWhatsApp() {
+  const { state, saveCreds } = await useMultiFileAuthState("./auth");
 
   const sock = makeWASocket({
     auth: state,
-    printQRInTerminal: true
+    printQRInTerminal: true,
+    browser: ["Chrome", "Linux", "1.0"]
   });
 
   sock.ev.on("creds.update", saveCreds);
 
   sock.ev.on("connection.update", async (update) => {
-    if (update.qr) {
-      const qr = await QRCode.toDataURL(update.qr);
-      sessions[id].qr = qr;
-      console.log("QR gerado para:", id);
+    const { qr, connection, lastDisconnect } = update;
+
+    if (qr) {
+      latestQR = await QRCode.toDataURL(qr);
+      console.log("QR Code gerado");
+    }
+
+    if (connection === "close") {
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      if (shouldReconnect) startWhatsApp();
+    }
+
+    if (connection === "open") {
+      console.log("WhatsApp conectado com sucesso!");
     }
   });
-
-  sessions[id] = { sock, qr: null };
 }
 
+startWhatsApp();
+
 app.get("/", (req, res) => {
-  res.send("Servidor WhatsApp QR rodando");
+  res.send("Servidor WhatsApp rodando");
 });
 
-app.get("/connect/:id", async (req, res) => {
-  const id = req.params.id;
-
-  if (!sessions[id]) {
-    await startSession(id);
+app.get("/qr", (req, res) => {
+  if (!latestQR) {
+    return res.status(404).json({ error: "QR ainda não gerado" });
   }
-
-  const checkQR = setInterval(() => {
-    if (sessions[id].qr) {
-      clearInterval(checkQR);
-      res.json({ qr: sessions[id].qr });
-    }
-  }, 1500);
-
-  setTimeout(() => {
-    clearInterval(checkQR);
-    if (!sessions[id].qr) {
-      res.status(500).json({ error: "QR não gerado ainda, recarregue a página." });
-    }
-  }, 20000);
+  res.json({ qr: latestQR });
 });
 
 app.listen(process.env.PORT || 3000, () => {
-  console.log("Servidor rodando...");
+  console.log("Servidor iniciado");
 });
