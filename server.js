@@ -10,7 +10,11 @@ let sessions = {};
 
 async function startSession(id) {
   const { state, saveCreds } = await useMultiFileAuthState(`./sessions/${id}`);
-  const sock = makeWASocket({ auth: state });
+
+  const sock = makeWASocket({
+    auth: state,
+    printQRInTerminal: true
+  });
 
   sock.ev.on("creds.update", saveCreds);
 
@@ -18,22 +22,39 @@ async function startSession(id) {
     if (update.qr) {
       const qr = await QRCode.toDataURL(update.qr);
       sessions[id].qr = qr;
+      console.log("QR gerado para:", id);
     }
   });
 
   sessions[id] = { sock, qr: null };
 }
 
-app.get("/connect/:id", async (req, res) => {
-  const id = req.params.id;
-  if (!sessions[id]) await startSession(id);
-
-  const interval = setInterval(() => {
-    if (sessions[id].qr) {
-      clearInterval(interval);
-      res.json({ qr: sessions[id].qr });
-    }
-  }, 1000);
+app.get("/", (req, res) => {
+  res.send("Servidor WhatsApp QR rodando");
 });
 
-app.listen(process.env.PORT || 3000);
+app.get("/connect/:id", async (req, res) => {
+  const id = req.params.id;
+
+  if (!sessions[id]) {
+    await startSession(id);
+  }
+
+  const checkQR = setInterval(() => {
+    if (sessions[id].qr) {
+      clearInterval(checkQR);
+      res.json({ qr: sessions[id].qr });
+    }
+  }, 1500);
+
+  setTimeout(() => {
+    clearInterval(checkQR);
+    if (!sessions[id].qr) {
+      res.status(500).json({ error: "QR não gerado ainda, recarregue a página." });
+    }
+  }, 20000);
+});
+
+app.listen(process.env.PORT || 3000, () => {
+  console.log("Servidor rodando...");
+});
