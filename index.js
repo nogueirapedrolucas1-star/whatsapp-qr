@@ -1,30 +1,29 @@
 const express = require('express')
-const qrcode = require('qrcode')
-const { Client, LocalAuth } = require('whatsapp-web.js')
+const venom = require('venom-bot')
 const { createClient } = require('@supabase/supabase-js')
-const crypto = require('crypto') // Para gerar ID único
+const crypto = require('crypto')
 
 const app = express()
 
+// Conexão Supabase via variáveis do Render
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
 )
 
-const clients = {} // Clientes ativos
+// Guarda clientes ativos
+const clients = {}
 
-// Página inicial
+// Página inicial → gera ID automático
 app.get('/', async (req, res) => {
-  // Gera ID único automático
   const userId = crypto.randomBytes(4).toString('hex')
   res.redirect(`/connect/${userId}`)
 })
 
-// Rota principal para gerar QR Code
+// Rota principal para conectar WhatsApp
 app.get('/connect/:userId', async (req, res) => {
   const userId = req.params.userId
 
-  // Se cliente já existe, mostra mensagem
   if (clients[userId]) {
     return res.send(`
       <h2>WhatsApp já conectado para ${userId}</h2>
@@ -32,17 +31,12 @@ app.get('/connect/:userId', async (req, res) => {
     `)
   }
 
-  const client = new Client({
-    authStrategy: new LocalAuth({ clientId: userId })
-  })
-  clients[userId] = client
-
-  let sent = false
-
-  // QR Code
-  client.on('qr', async (qr) => {
-    if (!sent) {
-      const qrImage = await qrcode.toDataURL(qr)
+  // Inicializa cliente do Venom
+  venom.create(
+    userId,
+    (base64Qr) => {
+      // QR Code em base64
+      const qrImage = `data:image/png;base64,${base64Qr}`
       res.send(`
         <html>
           <body style="text-align:center;font-family:Arial">
@@ -51,32 +45,31 @@ app.get('/connect/:userId', async (req, res) => {
           </body>
         </html>
       `)
-      sent = true
+    },
+    undefined, // status session callback opcional
+    {
+      headless: true,
+      useChrome: false, // não precisa do Chrome instalado
+      browserArgs: ['--no-sandbox', '--disable-setuid-sandbox']
     }
-  })
-
-  // Quando o WhatsApp estiver pronto
-  client.on('ready', async () => {
+  ).then((client) => {
+    clients[userId] = client
     console.log('WhatsApp conectado para:', userId)
 
-    await supabase.from('whatsapp_sessions').insert({
-      user_id: userId,
-      session_name: userId
+    // Mensagens recebidas
+    client.onMessage(async (msg) => {
+      await supabase.from('whatsapp_messages').insert({
+        user_id: userId,
+        from_number: msg.from,
+        message: msg.body
+      })
+
+      await client.sendText(msg.from, 'Olá! Sua mensagem foi recebida e a IA vai responder em breve 🤖')
     })
+  }).catch((err) => {
+    console.error('Erro ao iniciar o cliente Venom:', err)
+    res.send(`<p>Erro ao iniciar o WhatsApp: ${err}</p>`)
   })
-
-  // Mensagens recebidas
-  client.on('message', async (msg) => {
-    await supabase.from('whatsapp_messages').insert({
-      user_id: userId,
-      from_number: msg.from,
-      message: msg.body
-    })
-
-    await msg.reply('Olá! Sua mensagem foi recebida e a IA vai responder em breve 🤖')
-  })
-
-  client.initialize()
 })
 
 const PORT = process.env.PORT || 3000
