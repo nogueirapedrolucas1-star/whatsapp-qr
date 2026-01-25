@@ -1,28 +1,49 @@
-const express = require("express");
-const QRCode = require("qrcode");
-const { default: makeWASocket, useMultiFileAuthState } = require("@whiskeysockets/baileys");
+const { Client, LocalAuth } = require('whatsapp-web.js');
+const qrcode = require('qrcode');
+const express = require('express');
 
 const app = express();
-let qrBase64 = null;
+let qrImage = null;
 
-async function start() {
-  const { state, saveCreds } = await useMultiFileAuthState("./auth");
+// Cria o cliente do WhatsApp (igual WhatsApp Web)
+const client = new Client({
+    authStrategy: new LocalAuth()
+});
 
-  const sock = makeWASocket({
-    auth: state,
-    printQRInTerminal: true
-  });
+// Quando o WhatsApp gerar o QR Code
+client.on('qr', async (qr) => {
+    qrImage = await qrcode.toDataURL(qr);
+    console.log('QR Code gerado, abra /qr no navegador');
+});
 
-  sock.ev.on("creds.update", saveCreds);
-}
+// Quando conectar
+client.on('ready', () => {
+    console.log('WhatsApp conectado com sucesso!');
+});
 
-start();
+// Inicia o WhatsApp
+client.initialize();
 
-// ================================
-// CONFIGURAÇÃO DA PORTA DO SERVIDOR
-// ================================
-const PORT = process.env.PORT || 3000;
+// Página que mostra o QR Code
+app.get('/qr', (req, res) => {
+    if (!qrImage) {
+        return res.send('QR Code ainda não foi gerado, aguarde...');
+    }
 
-app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
+    res.send(`
+        <html>
+            <head>
+                <title>Conectar WhatsApp</title>
+            </head>
+            <body style="text-align:center; font-family:Arial">
+                <h2>Escaneie o QR Code com seu WhatsApp</h2>
+                <img src="${qrImage}" />
+            </body>
+        </html>
+    `);
+});
+
+// Liga o servidor
+app.listen(3000, () => {
+    console.log('Servidor rodando na porta 3000');
 });
