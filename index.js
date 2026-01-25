@@ -5,7 +5,6 @@ const { createClient } = require('@supabase/supabase-js')
 
 const app = express()
 
-// Conexão Supabase via variáveis do Render
 const supabase = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -16,43 +15,53 @@ app.get('/', (req, res) => {
   res.send(`
     <h2>Bem-vindo ao WhatsApp QR</h2>
     <p>Para gerar seu QR Code, acesse <code>/connect/SEU_ID</code></p>
-    <p>Exemplo: <a href="/connect/teste1">/connect/teste1</a></p>
   `)
 })
 
-// Rota para gerar QR Code
+const clients = {} // Guarda clientes ativos por userId
+
 app.get('/connect/:userId', async (req, res) => {
   const userId = req.params.userId
+
+  // Se já existe cliente, avisa que já conectado
+  if (clients[userId]) {
+    return res.send(`
+      <h2>WhatsApp já conectado para ${userId}</h2>
+      <p>Você pode enviar mensagens normalmente.</p>
+    `)
+  }
 
   const client = new Client({
     authStrategy: new LocalAuth({ clientId: userId })
   })
+  clients[userId] = client
 
-  // QR Code
+  let sent = false
+
   client.on('qr', async (qr) => {
-    const qrImage = await qrcode.toDataURL(qr)
-    res.send(`
-      <html>
-        <body style="text-align:center;font-family:Arial">
-          <h2>Escaneie o QR Code para conectar seu WhatsApp</h2>
-          <img src="${qrImage}" />
-        </body>
-      </html>
-    `)
+    if (!sent) {
+      const qrImage = await qrcode.toDataURL(qr)
+      res.send(`
+        <html>
+          <body style="text-align:center;font-family:Arial">
+            <h2>Escaneie o QR Code para conectar seu WhatsApp</h2>
+            <img src="${qrImage}" />
+          </body>
+        </html>
+      `)
+      sent = true
+    }
   })
 
-  // Quando conectado
   client.on('ready', async () => {
     console.log('WhatsApp conectado para:', userId)
 
-    // Salva no Supabase
     await supabase.from('whatsapp_sessions').insert({
       user_id: userId,
       session_name: userId
     })
   })
 
-  // Mensagens recebidas
   client.on('message', async (msg) => {
     await supabase.from('whatsapp_messages').insert({
       user_id: userId,
@@ -66,8 +75,8 @@ app.get('/connect/:userId', async (req, res) => {
   client.initialize()
 })
 
-// Porta exigida pelo Render
 const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log('Servidor rodando na porta ' + PORT)
 })
+
