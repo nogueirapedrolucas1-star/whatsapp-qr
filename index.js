@@ -2,6 +2,7 @@ const express = require('express')
 const qrcode = require('qrcode')
 const { Client, LocalAuth } = require('whatsapp-web.js')
 const { createClient } = require('@supabase/supabase-js')
+const crypto = require('crypto') // Para gerar ID único
 
 const app = express()
 
@@ -10,20 +11,20 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY
 )
 
+const clients = {} // Clientes ativos
+
 // Página inicial
-app.get('/', (req, res) => {
-  res.send(`
-    <h2>Bem-vindo ao WhatsApp QR</h2>
-    <p>Para gerar seu QR Code, acesse <code>/connect/SEU_ID</code></p>
-  `)
+app.get('/', async (req, res) => {
+  // Gera ID único automático
+  const userId = crypto.randomBytes(4).toString('hex')
+  res.redirect(`/connect/${userId}`)
 })
 
-const clients = {} // Guarda clientes ativos por userId
-
+// Rota principal para gerar QR Code
 app.get('/connect/:userId', async (req, res) => {
   const userId = req.params.userId
 
-  // Se já existe cliente, avisa que já conectado
+  // Se cliente já existe, mostra mensagem
   if (clients[userId]) {
     return res.send(`
       <h2>WhatsApp já conectado para ${userId}</h2>
@@ -38,6 +39,7 @@ app.get('/connect/:userId', async (req, res) => {
 
   let sent = false
 
+  // QR Code
   client.on('qr', async (qr) => {
     if (!sent) {
       const qrImage = await qrcode.toDataURL(qr)
@@ -53,6 +55,7 @@ app.get('/connect/:userId', async (req, res) => {
     }
   })
 
+  // Quando o WhatsApp estiver pronto
   client.on('ready', async () => {
     console.log('WhatsApp conectado para:', userId)
 
@@ -62,6 +65,7 @@ app.get('/connect/:userId', async (req, res) => {
     })
   })
 
+  // Mensagens recebidas
   client.on('message', async (msg) => {
     await supabase.from('whatsapp_messages').insert({
       user_id: userId,
@@ -79,4 +83,5 @@ const PORT = process.env.PORT || 3000
 app.listen(PORT, () => {
   console.log('Servidor rodando na porta ' + PORT)
 })
+
 
