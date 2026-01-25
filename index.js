@@ -1,47 +1,47 @@
-const { Client, LocalAuth } = require('whatsapp-web.js');
-const qrcode = require('qrcode');
-const express = require('express');
+import express from 'express'
+import qrcode from 'qrcode'
+import { Client, LocalAuth } from 'whatsapp-web.js'
+import { createClient } from '@supabase/supabase-js'
 
-const app = express();
-let qrImage = null;
+const app = express()
 
-// Cria o cliente do WhatsApp (igual WhatsApp Web)
-const client = new Client({
-    authStrategy: new LocalAuth()
-});
+const supabase = createClient(
+  'SUA_SUPABASE_URL',
+  'SUA_SUPABASE_SERVICE_ROLE_KEY'
+)
 
-// Quando o WhatsApp gerar o QR Code
-client.on('qr', async (qr) => {
-    qrImage = await qrcode.toDataURL(qr);
-    console.log('QR Code gerado, abra /qr no navegador');
-});
+// Rota para gerar QR por usuário
+app.get('/connect/:userId', async (req, res) => {
+  const userId = req.params.userId
 
-// Quando conectar
-client.on('ready', () => {
-    console.log('WhatsApp conectado com sucesso!');
-});
+  const client = new Client({
+    authStrategy: new LocalAuth({ clientId: userId })
+  })
 
-// Inicia o WhatsApp
-client.initialize();
-
-// Página que mostra o QR Code
-app.get('/qr', (req, res) => {
-    if (!qrImage) {
-        return res.send('QR Code ainda não foi gerado, aguarde...');
-    }
-
+  client.on('qr', async (qr) => {
+    const qrImage = await qrcode.toDataURL(qr)
     res.send(`
-        <html>
-            <head>
-                <title>Conectar WhatsApp</title>
-            </head>
-            <body style="text-align:center; font-family:Arial">
-                <h2>Escaneie o QR Code com seu WhatsApp</h2>
-                <img src="${qrImage}" />
-            </body>
-        </html>
-    `);
-});
+      <h2>Escaneie para conectar seu WhatsApp</h2>
+      <img src="${qrImage}" />
+    `)
+  })
+
+  client.on('ready', async () => {
+    await supabase.from('whatsapp_sessions').insert({
+      user_id: userId,
+      session_name: userId
+    })
+
+    console.log('WhatsApp conectado para o usuário:', userId)
+  })
+
+  client.initialize()
+})
+
+app.listen(3000, () => {
+  console.log('Sistema de QR rodando na porta 3000')
+})
+
 
 // Liga o servidor
 app.listen(3000, () => {
