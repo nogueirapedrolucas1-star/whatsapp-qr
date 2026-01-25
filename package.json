@@ -1,15 +1,14 @@
 {
-  "name": "whatsapp-qr",
+  "name": "whatsapp-qrcode-system",
   "version": "1.0.0",
-  "main": "server.js",
+  "description": "Sistema de QR Code para conectar WhatsApp ao site",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "^6.7.8",
     "express": "^4.18.2",
-    "cors": "^2.8.5",
     "qrcode": "^1.5.4",
-    "pino": "^8.17.0"
+    "whatsapp-web.js": "^1.23.0"
   }
 }
