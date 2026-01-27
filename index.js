@@ -1,27 +1,59 @@
-const express = require("express");
-const crypto = require("crypto");
-
+const venom = require('venom-bot');
+const express = require('express');
 const app = express();
+const PORT = process.env.PORT || 10000;
 
-// Rota de healthcheck (Render precisa disso)
-app.get("/", (req, res) => {
-  res.status(200).send("Servidor online");
+let qrCodeGlobal = null;
+
+// Cria a sessão do WhatsApp
+venom
+  .create({
+    session: 'whatsapp-session', // nome da sessão
+    puppeteerOptions: {
+      headless: true,
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--disable-dev-shm-usage',
+        '--disable-accelerated-2d-canvas',
+        '--disable-gpu',
+        '--window-size=1920x1080'
+      ],
+    },
+    multidevice: true
+  })
+  .then(client => start(client))
+  .catch(erro => console.log('Erro ao iniciar Venom:', erro));
+
+// Função para capturar eventos
+function start(client) {
+  console.log('Venom-bot iniciado');
+
+  // Captura o QR code
+  client.onStateChange((state) => {
+    if (state === 'QR') {
+      client.onQr((qr) => {
+        qrCodeGlobal = qr; // salva o QR code
+        console.log('QR code gerado');
+      });
+    }
+  });
+}
+
+// Rota principal para mostrar QR code
+app.get('/', (req, res) => {
+  if (qrCodeGlobal) {
+    // Usa serviço externo para gerar a imagem do QR code
+    res.send(`
+      <h1>WhatsApp QR Code</h1>
+      <p>Escaneie com seu WhatsApp para testar</p>
+      <img src="https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCodeGlobal)}&size=200x200" />
+    `);
+  } else {
+    res.send(`<h1>Servidor rodando na porta ${PORT}</h1><p>QR code ainda não gerado, recarregue a página em alguns segundos</p>`);
+  }
 });
 
-// Rota que gera o usuário e redireciona pro QR
-app.get("/start", (req, res) => {
-  const userId = crypto.randomBytes(4).toString("hex");
-  res.redirect(`/connect/${userId}`);
-});
-
-// Simulação da rota do QR (aqui entra o venom depois)
-app.get("/connect/:userId", (req, res) => {
-  const { userId } = req.params;
-  res.send(`Gerando QR Code para o usuário: ${userId}`);
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Servidor rodando na porta " + PORT);
-});
+// Inicializa o servidor
+app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
 
