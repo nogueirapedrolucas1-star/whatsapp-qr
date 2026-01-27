@@ -30,7 +30,6 @@ venom
 function start(client) {
   console.log('Venom-bot iniciado');
 
-  // Evento para capturar o QR code
   client.onStateChange((state) => {
     if (state === 'QR') {
       client.onQr((qr) => {
@@ -43,22 +42,20 @@ function start(client) {
 
 // Rota principal para mostrar QR code
 app.get('/', (req, res) => {
-  if (qrCodeGlobal) {
-    // Usa serviço externo para gerar a imagem do QR code
-    res.send(`
-      <h1>WhatsApp QR Code</h1>
-      <p>Escaneie com seu WhatsApp para testar</p>
-      <img id="qr" src="https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCodeGlobal)}&size=200x200" />
-      <script>
-        // Atualiza QR code a cada 15 segundos
-        setInterval(() => {
-          document.getElementById('qr').src = "https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCodeGlobal)}&size=200x200&rand=" + Math.random();
-        }, 15000);
-      </script>
-    `);
-  } else {
-    res.send(`<h1>Servidor rodando na porta ${PORT}</h1><p>QR code ainda não gerado, recarregue a página em alguns segundos</p>`);
-  }
+  res.send(`
+    <h1>WhatsApp QR Code</h1>
+    <p>${qrCodeGlobal ? 'Escaneie com seu WhatsApp' : 'QR code carregando, aguarde alguns segundos...'}</p>
+    <img id="qr" src="${qrCodeGlobal ? 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(qrCodeGlobal) + '&size=200x200' : ''}" />
+    <script>
+      // Atualiza a imagem do QR code a cada 5 segundos
+      setInterval(() => {
+        const qr = document.getElementById('qr');
+        if (${qrCodeGlobal ? 'true' : 'false'}) {
+          qr.src = "https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCodeGlobal)}&size=200x200&rand=" + Math.random();
+        }
+      }, 5000);
+    </script>
+  `);
 });
 
 // Inicializa o servidor
