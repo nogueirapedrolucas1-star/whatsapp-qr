@@ -21,15 +21,15 @@ venom
       ],
     },
     multidevice: true,
-    deleteSessionData: true // força gerar QR code sempre
+    deleteSessionData: true // força gerar QR code novo
   })
   .then(client => start(client))
   .catch(erro => console.log('Erro ao iniciar Venom:', erro));
 
-// Função para capturar eventos
 function start(client) {
   console.log('Venom-bot iniciado');
 
+  // Captura o QR code assim que o WhatsApp Web pedir login
   client.onStateChange((state) => {
     if (state === 'QR') {
       client.onQr((qr) => {
@@ -40,23 +40,40 @@ function start(client) {
   });
 }
 
-// Rota principal para mostrar QR code
+// Rota principal
 app.get('/', (req, res) => {
   res.send(`
     <h1>WhatsApp QR Code</h1>
-    <p>${qrCodeGlobal ? 'Escaneie com seu WhatsApp' : 'QR code carregando, aguarde alguns segundos...'}</p>
-    <img id="qr" src="${qrCodeGlobal ? 'https://api.qrserver.com/v1/create-qr-code/?data=' + encodeURIComponent(qrCodeGlobal) + '&size=200x200' : ''}" />
+    <p id="status">${qrCodeGlobal ? 'Escaneie com seu WhatsApp' : 'QR code carregando, aguarde alguns segundos...'}</p>
+    <img id="qr" src="" />
     <script>
-      // Atualiza a imagem do QR code a cada 5 segundos
-      setInterval(() => {
-        const qr = document.getElementById('qr');
-        if (${qrCodeGlobal ? 'true' : 'false'}) {
-          qr.src = "https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(qrCodeGlobal)}&size=200x200&rand=" + Math.random();
+      async function atualizarQR() {
+        try {
+          const response = await fetch('/qr');
+          const data = await response.text();
+          const qrImg = document.getElementById('qr');
+          const status = document.getElementById('status');
+          if(data) {
+            qrImg.src = "https://api.qrserver.com/v1/create-qr-code/?data=" + encodeURIComponent(data) + "&size=200x200&rand=" + Math.random();
+            status.innerText = "Escaneie com seu WhatsApp";
+          } else {
+            status.innerText = "QR code carregando, aguarde alguns segundos...";
+          }
+        } catch(e) {
+          console.log("Erro ao atualizar QR:", e);
         }
-      }, 5000);
+      }
+
+      // Atualiza QR a cada 5 segundos
+      setInterval(atualizarQR, 5000);
+      atualizarQR(); // roda na primeira vez
     </script>
   `);
 });
 
-// Inicializa o servidor
+// Rota que retorna o QR code atual
+app.get('/qr', (req, res) => {
+  res.send(qrCodeGlobal || '');
+});
+
 app.listen(PORT, () => console.log(`Servidor rodando na porta ${PORT}`));
