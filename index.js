@@ -11,16 +11,16 @@ create({
   disableWelcome: true,
   autoClose: 0
 }, (base64Qr) => {
-  console.log("QR RECEBIDO");
+  console.log("QR Code recebido!");
   qrCodeGlobal = base64Qr;
 }).then((client) => {
-  console.log("WhatsApp conectado!");
+  console.log("WhatsApp conectado com sucesso!");
 }).catch((err) => {
   console.log("Erro ao iniciar Venom:", err);
 });
 
 app.get("/", (req, res) => {
-  res.send("Servidor online. Acesse /qr");
+  res.send("Servidor online. Acesse /qr para ver o QR code.");
 });
 
 app.get("/qr", (req, res) => {
