@@ -7,21 +7,26 @@ let qrCodeGlobal = "";
 create({
   session: "whatsapp-session",
   multidevice: true,
-  headless: true
+  headless: true,
+  disableWelcome: true,
+  autoClose: 0
 }, (base64Qr) => {
+  console.log("QR RECEBIDO");
   qrCodeGlobal = base64Qr;
-  console.log("QR Code gerado!");
 }).then((client) => {
-  console.log("WhatsApp conectado com sucesso!");
+  console.log("WhatsApp conectado!");
 }).catch((err) => {
   console.log("Erro ao iniciar Venom:", err);
 });
 
 app.get("/", (req, res) => {
-  res.send("Servidor rodando. Acesse /qr para pegar o QR code.");
+  res.send("Servidor online. Acesse /qr");
 });
 
 app.get("/qr", (req, res) => {
+  if (!qrCodeGlobal) {
+    return res.send("");
+  }
   res.send(qrCodeGlobal);
 });
 
