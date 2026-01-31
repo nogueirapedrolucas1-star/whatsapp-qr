@@ -2,21 +2,30 @@ const express = require("express");
 const venom = require("venom-bot");
 
 const app = express();
-let qrCodeBase64 = null;
+let qrCode = null;
 
 venom.create(
   {
-    session: "ia-whatsapp",
+    session: "teste-cliente",
     headless: true
   },
   (base64Qr) => {
-    qrCodeBase64 = base64Qr;
-    console.log("QR Code recebido");
+    qrCode = base64Qr;
+    console.log("QR Code gerado");
   }
 ).then((client) => {
   console.log("WhatsApp conectado");
-}).catch(err => {
-  console.error("Erro:", err);
+
+  client.onMessage(async (message) => {
+    if (!message.isGroupMsg) {
+      await client.sendText(
+        message.from,
+        "🤖 IA de teste ativa! Mensagem recebida com sucesso."
+      );
+    }
+  });
+}).catch((err) => {
+  console.log("Erro ao iniciar WhatsApp:", err);
 });
 
 app.get("/", (req, res) => {
@@ -24,13 +33,13 @@ app.get("/", (req, res) => {
 });
 
 app.get("/qr", (req, res) => {
-  if (!qrCodeBase64) {
-    return res.send("QR ainda não gerado, aguarde...");
+  if (!qrCode) {
+    return res.send("QR code ainda não gerado, aguarde alguns segundos...");
   }
 
   res.send(`
     <h2>Escaneie o QR Code</h2>
-    <img src="${qrCodeBase64}" />
+    <img src="${qrCode}" />
   `);
 });
 
